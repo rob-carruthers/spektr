@@ -5,7 +5,8 @@ t = TempoClock(1);
 
 OSCdef(\ping, {
 	|msg, time, addr, recvPort|
-	addr.sendMsg("/ping", "success");
+	var request_id = msg[1];
+	addr.sendMsg("/ping", request_id, "success");
 }, '/ping');
 )
 
