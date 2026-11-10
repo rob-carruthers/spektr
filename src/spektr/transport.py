@@ -52,7 +52,12 @@ class Transport:
 
     def ping(self, timeout: float = 5.0) -> None:
         """Ping SuperCollider."""
-        response = self.request("/ping", timeout=timeout)
+        try:
+            response = self.request("/ping", timeout=timeout)
+        except TimeoutError:
+            msg = "Failed to ping (is SuperCollider booted?)"
+            raise TimeoutError(msg) from None
+
         if response != ["success"]:
             msg = f"Unexpected response to /ping: {response!r}"
             raise ValueError(msg)
