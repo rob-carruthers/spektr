@@ -3,12 +3,43 @@
 import itertools
 import time
 from threading import Lock
+from typing import NamedTuple, Self
 
 from pythonosc.udp_client import SimpleUDPClient
 
 SCLANG_PORT = 57120
 
 type OscArg = int | float | str | bytes | bool | list[OscArg] | None
+
+
+class ClockState(NamedTuple):
+    """Holder of last-reported clock state of SuperCollider."""
+
+    bar: int
+    beats: float
+    tempo: float
+
+    @classmethod
+    def from_message(cls, params: list[OscArg]) -> Self:
+        """Construct a ClockState from an OSC message response."""
+        bar, beats, tempo = params
+        if not isinstance(bar, float):
+            msg = "`bar` was not of type float."
+            raise TypeError(msg)
+
+        if not isinstance(beats, float):
+            msg = "`beats` was not of type float."
+            raise TypeError(msg)
+
+        if not isinstance(tempo, float):
+            msg = "`tempo` was not of type float."
+            raise TypeError(msg)
+
+        return cls(int(bar), beats, tempo)
+
+    @property
+    def bpm(self) -> float:  # noqa: D102
+        return self.tempo * 60.0
 
 
 class Transport:
@@ -61,3 +92,8 @@ class Transport:
         if response != ["success"]:
             msg = f"Unexpected response to /ping: {response!r}"
             raise ValueError(msg)
+
+    def get_clock_state(self) -> ClockState:
+        """Request state from SuperCollider and construct a ClockState from the response."""
+        response = self.request("/state")
+        return ClockState.from_message(response)
