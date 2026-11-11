@@ -24,3 +24,8 @@ select = ["ALL"]
 ignore = [
   "CPY"
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: needs a live sclang with the OSCdefs loaded",
+]
