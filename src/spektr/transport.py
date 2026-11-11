@@ -17,12 +17,12 @@ class ClockState(NamedTuple):
 
     bar: int
     beats: float
-    tempo: float
+    beats_per_second: float
 
     @classmethod
     def from_message(cls, params: list[OscArg]) -> Self:
         """Construct a ClockState from an OSC message response."""
-        bar, beats, tempo = params
+        bar, beats, beats_per_second = params
         if not isinstance(bar, float):
             msg = "`bar` was not of type float."
             raise TypeError(msg)
@@ -31,15 +31,15 @@ class ClockState(NamedTuple):
             msg = "`beats` was not of type float."
             raise TypeError(msg)
 
-        if not isinstance(tempo, float):
-            msg = "`tempo` was not of type float."
+        if not isinstance(beats_per_second, float):
+            msg = "`beats_per_second` was not of type float."
             raise TypeError(msg)
 
-        return cls(int(bar), beats, tempo)
+        return cls(int(bar), beats, beats_per_second)
 
     @property
     def bpm(self) -> float:  # noqa: D102
-        return self.tempo * 60.0
+        return self.beats_per_second * 60.0
 
 
 class Transport:
