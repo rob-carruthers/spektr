@@ -34,31 +34,31 @@ def test_clockstate_rejects_non_float(index: int, name: str) -> None:
 def test_next_bar_valid() -> None:
     # bar, beats, beats_per_second, beats_per_bar, bar_start_beats
     message: list[OscArg] = [0.0, 0.5, 1.0, 4.0, 0.0]
-    assert ClockState.from_message(message).next_bar_beats() == 4.0
+    assert ClockState.from_message(message).next_bar_beats == 4.0
 
 
 def test_next_bar_valid_higher_tempo() -> None:
     # bar, beats, beats_per_second, beats_per_bar, bar_start_beats
     message: list[OscArg] = [0.0, 3.85, 2.0, 4.0, 0.0]
-    assert ClockState.from_message(message).next_bar_beats(0.1) == 8.0
+    assert ClockState.from_message(message).next_bar_beats == 8.0
 
 
 def test_next_bar_valid_overflow() -> None:
     # bar, beats, beats_per_second, beats_per_bar, bar_start_beats
     message: list[OscArg] = [0.0, 3.95, 1.0, 4.0, 0.0]
-    assert ClockState.from_message(message).next_bar_beats(0.1) == 8.0
+    assert ClockState.from_message(message).next_bar_beats == 8.0
 
 
 def test_next_bar_from_reanchored_grid() -> None:
     # We changed to 3 beats per bar precisely at beat 10.0
     message: list[OscArg] = [0.0, 11.0, 1.0, 3.0, 10.0]
-    assert ClockState.from_message(message).next_bar_beats() == 13.0
+    assert ClockState.from_message(message).next_bar_beats == 13.0
 
 
 def test_next_bar_from_reanchored_grid_overflow() -> None:
     # We changed to 3 beats per bar precisely at beat 10.0
     message: list[OscArg] = [0.0, 12.95, 1.0, 3.0, 10.0]
-    assert ClockState.from_message(message).next_bar_beats(0.1) == 16.0
+    assert ClockState.from_message(message).next_bar_beats == 16.0
 
 
 def test_clock_state_expiry() -> None:
@@ -67,4 +67,24 @@ def test_clock_state_expiry() -> None:
     time.sleep(0.02)
 
     with pytest.raises(StaleClockStateError):
-        state.next_bar_beats()
+        _ = state.next_bar_beats
+
+
+@pytest.mark.integration
+def test_clock_state_caching() -> None:
+    transport = Transport()
+    h1 = transport.clock_state
+    h2 = transport.clock_state
+    assert h1 is h2
+
+
+@pytest.mark.integration
+def test_clock_state_refresh() -> None:
+    ttl = 0.01
+    transport = Transport(ttl)
+    h1 = transport.clock_state
+    time.sleep(ttl * 2)
+    h2 = transport.clock_state
+    assert h1 is not h2
+    assert h2.requested_at > h1.requested_at
+    assert h2.beats > h1.beats

@@ -72,7 +72,8 @@ class ClockState(NamedTuple):
         """Check if this ClockState has become stale."""
         return time.monotonic() > (self.requested_at + self.expiry)
 
-    def next_bar_beats(self, min_seconds: float = 0.1) -> float:
+    @property
+    def next_bar_beats(self) -> float:
         """Return the time in beats of the next bar.
 
         If we are too close to the actual next bar, return the following bar.
@@ -80,7 +81,7 @@ class ClockState(NamedTuple):
         if self.is_stale():
             raise StaleClockStateError
 
-        min_beats = min_seconds * self.beats_per_second
+        min_beats = self.expiry * self.beats_per_second
         boundary = self.bar_start_beats + self.beats_per_bar
         if boundary - self.beats < min_beats:
             boundary += self.beats_per_bar
@@ -90,11 +91,13 @@ class ClockState(NamedTuple):
 class Transport:
     """Transport class holding an OSC SimpleUDPClient."""
 
-    def __init__(self) -> None:
+    def __init__(self, clock_state_timeout: float = 0.05) -> None:
         """Initialize OSC client and test ping."""
         self.client = SimpleUDPClient("127.0.0.1", SCLANG_PORT)
         self._lock = Lock()
         self._ids = itertools.count(1)
+        self._clock_state_timeout = clock_state_timeout
+        self._cached_state: ClockState | None = None
 
     def request(self, address: str, *args: OscArg, timeout: float = 0.1) -> list[OscArg]:
         """Send a message to SC and gather the response."""
@@ -141,4 +144,20 @@ class Transport:
         """Request state from SuperCollider and construct a ClockState from the response."""
         requested_at = time.monotonic()
         response = self.request("/state")
-        return ClockState.from_message(response, requested_at)
+        return ClockState.from_message(response, requested_at, expiry=self._clock_state_timeout)
+
+    @property
+    def clock_state(self) -> ClockState:
+        """Return a ClockState.
+
+        Will cache for a very short interval for debouncing of multiple accessess of this attribute.
+        """
+        if self._cached_state is None or self._cached_state.is_stale():
+            self._cached_state = self.get_clock_state()
+
+        return self._cached_state
+
+    @property
+    def next_bar_beats(self) -> float:
+        """Retrieve next_bar_beats from a fresh or recently-cached ClockState."""
+        return self.clock_state.next_bar_beats
