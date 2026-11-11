@@ -18,11 +18,13 @@ class ClockState(NamedTuple):
     bar: int
     beats: float
     beats_per_second: float
+    beats_per_bar: float
+    bar_start_beats: float
 
     @classmethod
     def from_message(cls, params: list[OscArg]) -> Self:
         """Construct a ClockState from an OSC message response."""
-        bar, beats, beats_per_second = params
+        bar, beats, beats_per_second, beats_per_bar, bar_start_beats = params
         if not isinstance(bar, float):
             msg = "`bar` was not of type float."
             raise TypeError(msg)
@@ -35,11 +37,30 @@ class ClockState(NamedTuple):
             msg = "`beats_per_second` was not of type float."
             raise TypeError(msg)
 
-        return cls(int(bar), beats, beats_per_second)
+        if not isinstance(beats_per_bar, float):
+            msg = "`beats_per_bar` was not of type float."
+            raise TypeError(msg)
+
+        if not isinstance(bar_start_beats, float):
+            msg = "`bar_start_beats` was not of type float."
+            raise TypeError(msg)
+
+        return cls(int(bar), beats, beats_per_second, beats_per_bar, bar_start_beats)
 
     @property
     def bpm(self) -> float:  # noqa: D102
         return self.beats_per_second * 60.0
+
+    def next_bar_beats(self, min_seconds: float = 0.1) -> float:
+        """Return the time in beats of the next bar.
+
+        If we are too close to the actual next bar, return the following bar.
+        """
+        min_beats = min_seconds * self.beats_per_second
+        boundary = self.bar_start_beats + self.beats_per_bar
+        if boundary - self.beats < min_beats:
+            boundary += self.beats_per_bar
+        return boundary
 
 
 class Transport:
