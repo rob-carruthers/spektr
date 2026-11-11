@@ -29,3 +29,6 @@ ignore = [
 markers = [
     "integration: needs a live sclang with the OSCdefs loaded",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "D100", "D103", "PLR2004"]
