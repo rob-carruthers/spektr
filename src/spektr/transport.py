@@ -12,6 +12,13 @@ SCLANG_PORT = 57120
 type OscArg = int | float | str | bytes | bool | list[OscArg] | None
 
 
+def _as_float(name: str, value: OscArg) -> float:
+    if not isinstance(value, float):
+        msg = f"`{name}` should be float, got {type(value).__name__}: {value!r}"
+        raise TypeError(msg)
+    return value
+
+
 class ClockState(NamedTuple):
     """Holder of last-reported clock state of SuperCollider."""
 
@@ -25,25 +32,11 @@ class ClockState(NamedTuple):
     def from_message(cls, params: list[OscArg]) -> Self:
         """Construct a ClockState from an OSC message response."""
         bar, beats, beats_per_second, beats_per_bar, bar_start_beats = params
-        if not isinstance(bar, float):
-            msg = "`bar` was not of type float."
-            raise TypeError(msg)
-
-        if not isinstance(beats, float):
-            msg = "`beats` was not of type float."
-            raise TypeError(msg)
-
-        if not isinstance(beats_per_second, float):
-            msg = "`beats_per_second` was not of type float."
-            raise TypeError(msg)
-
-        if not isinstance(beats_per_bar, float):
-            msg = "`beats_per_bar` was not of type float."
-            raise TypeError(msg)
-
-        if not isinstance(bar_start_beats, float):
-            msg = "`bar_start_beats` was not of type float."
-            raise TypeError(msg)
+        bar = _as_float("bar", bar)
+        beats = _as_float("beats", beats)
+        beats_per_second = _as_float("beats_per_second", beats_per_second)
+        beats_per_bar = _as_float("beats_per_bar", beats_per_bar)
+        bar_start_beats = _as_float("bar_start_beats", bar_start_beats)
 
         return cls(int(bar), beats, beats_per_second, beats_per_bar, bar_start_beats)
 
