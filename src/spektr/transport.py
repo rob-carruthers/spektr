@@ -50,7 +50,6 @@ class Transport:
         self.client = SimpleUDPClient("127.0.0.1", SCLANG_PORT)
         self._lock = Lock()
         self._ids = itertools.count(1)
-        self.ping()
 
     def request(self, address: str, *args: OscArg, timeout: float = 0.1) -> list[OscArg]:
         """Send a message to SC and gather the response."""
