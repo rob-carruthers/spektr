@@ -19,17 +19,32 @@ def _as_float(name: str, value: OscArg) -> float:
     return value
 
 
+class StaleClockStateError(ValueError):
+    """Raise if clock state is used too late after it was requested."""
+
+
 class ClockState(NamedTuple):
-    """Holder of last-reported clock state of SuperCollider."""
+    """Holder of last-reported clock state of SuperCollider.
+
+    This should be considered ephemeral as the output of transport callers such as
+    get_clock_state(). As such, instance methods should implement
+    """
 
     bar: int
     beats: float
     beats_per_second: float
     beats_per_bar: float
     bar_start_beats: float
+    requested_at: float
+    expiry: float
 
     @classmethod
-    def from_message(cls, params: list[OscArg]) -> Self:
+    def from_message(
+        cls,
+        params: list[OscArg],
+        requested_at: float | None = None,
+        expiry: float = 0.1,
+    ) -> Self:
         """Construct a ClockState from an OSC message response."""
         bar, beats, beats_per_second, beats_per_bar, bar_start_beats = params
         bar = _as_float("bar", bar)
@@ -37,18 +52,34 @@ class ClockState(NamedTuple):
         beats_per_second = _as_float("beats_per_second", beats_per_second)
         beats_per_bar = _as_float("beats_per_bar", beats_per_bar)
         bar_start_beats = _as_float("bar_start_beats", bar_start_beats)
+        requested_at = requested_at or time.monotonic()
 
-        return cls(int(bar), beats, beats_per_second, beats_per_bar, bar_start_beats)
+        return cls(
+            int(bar),
+            beats,
+            beats_per_second,
+            beats_per_bar,
+            bar_start_beats,
+            requested_at,
+            expiry,
+        )
 
     @property
     def bpm(self) -> float:  # noqa: D102
         return self.beats_per_second * 60.0
+
+    def is_stale(self) -> bool:
+        """Check if this ClockState has become stale."""
+        return time.monotonic() > (self.requested_at + self.expiry)
 
     def next_bar_beats(self, min_seconds: float = 0.1) -> float:
         """Return the time in beats of the next bar.
 
         If we are too close to the actual next bar, return the following bar.
         """
+        if self.is_stale():
+            raise StaleClockStateError
+
         min_beats = min_seconds * self.beats_per_second
         boundary = self.bar_start_beats + self.beats_per_bar
         if boundary - self.beats < min_beats:
@@ -108,5 +139,6 @@ class Transport:
 
     def get_clock_state(self) -> ClockState:
         """Request state from SuperCollider and construct a ClockState from the response."""
+        requested_at = time.monotonic()
         response = self.request("/state")
-        return ClockState.from_message(response)
+        return ClockState.from_message(response, requested_at)

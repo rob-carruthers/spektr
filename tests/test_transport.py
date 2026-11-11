@@ -1,6 +1,8 @@
+import time
+
 import pytest
 
-from spektr.transport import ClockState, OscArg, Transport
+from spektr.transport import ClockState, OscArg, StaleClockStateError, Transport
 
 
 def test_transport_creation() -> None:
@@ -20,7 +22,10 @@ def test_clockstate_creation() -> None:
 
 @pytest.mark.parametrize(("index", "name"), tuple(enumerate(ClockState._fields)))
 def test_clockstate_rejects_non_float(index: int, name: str) -> None:
-    message: list[OscArg] = [1.0 for _ in ClockState._fields]
+    excluded = ("requested_at", "expiry")
+    if name in excluded:
+        return
+    message: list[OscArg] = [1.0 for _ in ClockState._fields if _ not in excluded]
     message[index] = 1
     with pytest.raises(TypeError, match=f"`{name}`"):
         ClockState.from_message(message)
@@ -54,3 +59,12 @@ def test_next_bar_from_reanchored_grid_overflow() -> None:
     # We changed to 3 beats per bar precisely at beat 10.0
     message: list[OscArg] = [0.0, 12.95, 1.0, 3.0, 10.0]
     assert ClockState.from_message(message).next_bar_beats(0.1) == 16.0
+
+
+def test_clock_state_expiry() -> None:
+    message: list[OscArg] = [0.0, 12.95, 1.0, 3.0, 10.0]
+    state = ClockState.from_message(message, expiry=0.01)
+    time.sleep(0.02)
+
+    with pytest.raises(StaleClockStateError):
+        state.next_bar_beats()
