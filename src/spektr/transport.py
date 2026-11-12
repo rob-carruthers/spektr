@@ -1,6 +1,7 @@
 """Transport, communication between Python and SuperCollider via OSC."""
 
 import itertools
+import math
 import time
 from threading import Lock
 from typing import NamedTuple, Self
@@ -17,6 +18,26 @@ def _as_float(name: str, value: OscArg) -> float:
         msg = f"`{name}` should be float, got {type(value).__name__}: {value!r}"
         raise TypeError(msg)
     return value
+
+
+METER_SETTLE_SECONDS = 0.1
+NEXT_BAR_LEAD_SECONDS = 0.1
+
+
+class Meter(NamedTuple):
+    """A meter in time signature form, with a record of when SC changed to this meter."""
+
+    upper: int
+    lower: int
+    changed_at_beats: float
+
+
+class ExistingPendingMeterChangeError(ValueError):
+    """Raised when SC received a meter change when another was already requested and pending."""
+
+
+class LateMeterChangeError(Exception):
+    """Raised when SC received a meter change after its target beat had passed."""
 
 
 class StaleClockStateError(ValueError):
@@ -52,7 +73,8 @@ class ClockState(NamedTuple):
         beats_per_second = _as_float("beats_per_second", beats_per_second)
         beats_per_bar = _as_float("beats_per_bar", beats_per_bar)
         bar_start_beats = _as_float("bar_start_beats", bar_start_beats)
-        requested_at = requested_at or time.monotonic()
+        if requested_at is None:
+            requested_at = time.monotonic()
 
         return cls(
             int(bar),
@@ -72,16 +94,18 @@ class ClockState(NamedTuple):
         """Check if this ClockState has become stale."""
         return time.monotonic() > (self.requested_at + self.expiry)
 
-    @property
-    def next_bar_beats(self) -> float:
-        """Return the time in beats of the next bar.
+    def next_bar_beats(self, min_seconds: float = NEXT_BAR_LEAD_SECONDS) -> float:
+        """Return the absolute beat of the next bar line.
 
-        If we are too close to the actual next bar, return the following bar.
+        If that bar line is closer than `min_seconds`, return the following one.
+        Raises StaleClockStateError if this snapshot has expired.
         """
         if self.is_stale():
-            raise StaleClockStateError
+            age = time.monotonic() - self.requested_at
+            msg = f"clock state is {age:.3f}s old (limit {self.expiry}s)"
+            raise StaleClockStateError(msg)
 
-        min_beats = self.expiry * self.beats_per_second
+        min_beats = min_seconds * self.beats_per_second
         boundary = self.bar_start_beats + self.beats_per_bar
         if boundary - self.beats < min_beats:
             boundary += self.beats_per_bar
@@ -98,6 +122,7 @@ class Transport:
         self._ids = itertools.count(1)
         self._clock_state_timeout = clock_state_timeout
         self._cached_state: ClockState | None = None
+        self._last_meter_change: Meter | None = None
 
     def request(self, address: str, *args: OscArg, timeout: float = 0.1) -> list[OscArg]:
         """Send a message to SC and gather the response."""
@@ -146,6 +171,52 @@ class Transport:
         response = self.request("/state")
         return ClockState.from_message(response, requested_at, expiry=self._clock_state_timeout)
 
+    def set_meter(self, upper: int, lower: int) -> float:
+        """Set SC's meter from an `upper`/`lower` time signature.
+
+        Request a change at the next bar, failing if one has already been requested (and still
+        pending), or if we are requesting a meter change at a time in the past.
+        """
+        if upper <= 0:
+            msg = "`upper` should be > 0"
+            raise ValueError(msg)
+        if lower <= 0:
+            msg = "`lower` should be > 0"
+            raise ValueError(msg)
+
+        state = self.get_clock_state()
+
+        # Prevent another meter change before the last change has materialised
+        last = self._last_meter_change
+        settle_beats = METER_SETTLE_SECONDS * state.beats_per_second
+        pending_until = None if last is None else last.changed_at_beats + settle_beats
+        if pending_until is not None and state.beats < pending_until:
+            msg = f"meter change pending until beat {pending_until:.3f} (now {state.beats:.3f})"
+            raise ExistingPendingMeterChangeError(msg)
+
+        # Try to request the meter change from SC
+        next_bar_beats = state.next_bar_beats()
+        beats_per_bar = (upper / lower) * 4.0
+        response = self.request("/set/beats_per_bar", beats_per_bar, next_bar_beats)
+        match response:
+            case ["ok", float(confirmed)]:
+                if not math.isclose(confirmed, beats_per_bar, rel_tol=1e-6):
+                    msg = f"SC scheduled {confirmed}, expected {beats_per_bar}"
+                    raise ValueError(msg)
+            case ["late", float(current_beats)]:
+                msg = (
+                    f"Meter change for beat {next_bar_beats} arrived late "
+                    f"(SC was already at {current_beats})"
+                )
+                raise LateMeterChangeError(msg)
+            case _:
+                msg = f"Unexpected response: {response!r}"
+                raise ValueError(msg)
+
+        self._last_meter_change = Meter(upper, lower, next_bar_beats)
+
+        return next_bar_beats
+
     @property
     def clock_state(self) -> ClockState:
         """Return a ClockState.
@@ -157,7 +228,6 @@ class Transport:
 
         return self._cached_state
 
-    @property
-    def next_bar_beats(self) -> float:
+    def next_bar_beats(self, min_seconds: float = NEXT_BAR_LEAD_SECONDS) -> float:
         """Retrieve next_bar_beats from a fresh or recently-cached ClockState."""
-        return self.clock_state.next_bar_beats
+        return self.clock_state.next_bar_beats(min_seconds)
