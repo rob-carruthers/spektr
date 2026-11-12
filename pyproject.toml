@@ -28,6 +28,7 @@ ignore = [
 [tool.pytest.ini_options]
 markers = [
     "integration: needs a live sclang with the OSCdefs loaded",
+    "slow: is a slow test",
 ]
 
 [tool.ruff.lint.per-file-ignores]
