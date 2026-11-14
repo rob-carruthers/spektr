@@ -87,7 +87,7 @@ class ClockState(NamedTuple):
         )
 
     @property
-    def bpm(self) -> float:  # noqa: D102
+    def beats_per_minute(self) -> float:  # noqa: D102
         return self.beats_per_second * 60.0
 
     def is_stale(self) -> bool:
