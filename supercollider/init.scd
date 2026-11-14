@@ -16,6 +16,15 @@
     addr.sendMsg("/state", request_id, ~clock.bar, ~clock.beats, ~clock.tempo, ~clock.beatsPerBar, barStartBeats);
   }, "/state");
 
+  OSCdef(\setBeatsPerSecond, {
+    |msg, time, addr, recvPort|
+    var requestId = msg[1];
+    var newBeatsPerSecond = msg[2];
+
+    ~clock.tempo = newBeatsPerSecond;
+    addr.sendMsg("/set/beats_per_second", requestId, "ok", newBeatsPerSecond);
+  }, "/set/beats_per_second");
+
   OSCdef(\setBeatsPerBar, {
     |msg, time, addr, recvPort|
     var requestId = msg[1];

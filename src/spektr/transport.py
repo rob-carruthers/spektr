@@ -171,6 +171,27 @@ class Transport:
         response = self.request("/state")
         return ClockState.from_message(response, requested_at, expiry=self._clock_state_timeout)
 
+    def set_beats_per_second(self, beats_per_second: float) -> float:
+        """Set SC's tempo instantaneously."""
+        response = self.request("/set/beats_per_second", beats_per_second)
+        if not isinstance(response[1], float):
+            raise TypeError
+
+        if response[0] != "ok" or not math.isclose(response[1], beats_per_second, rel_tol=1e-6):
+            msg = "SC did not respond with the requested tempo."
+            raise ValueError(msg)
+
+        return beats_per_second
+
+    def set_beats_per_minute(self, beats_per_minute: float) -> float:
+        """Set SC's beats per minute instantaneously.
+
+        Convenience wrapper for Transport.set_beats_per_second().
+        """
+        self.set_beats_per_second(beats_per_minute / 60.0)
+
+        return beats_per_minute
+
     def set_meter(self, upper: int, lower: int) -> float:
         """Set SC's meter from an `upper`/`lower` time signature.
 

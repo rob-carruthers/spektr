@@ -230,3 +230,25 @@ def test_meter_change_takes_effect(
 
     next_bar = wait_for_beat(transport, at + beats_per_bar + settle_beats)
     assert next_bar.bar_start_beats == pytest.approx(at + beats_per_bar, abs=EPSILON)
+
+
+@pytest.mark.integration
+def test_set_beats_per_second(integration_transport: Transport) -> None:
+    bps1 = 1.0
+    response = integration_transport.set_beats_per_second(bps1)
+    assert response == bps1
+
+    bps2 = 3.0
+    response = integration_transport.set_beats_per_second(bps2)
+    assert response == bps2
+
+
+@pytest.mark.integration
+def test_set_beats_per_minute(integration_transport: Transport) -> None:
+    bps1 = 60.0
+    response = integration_transport.set_beats_per_minute(bps1)
+    assert response == bps1
+
+    bps2 = 180.0
+    response = integration_transport.set_beats_per_minute(bps2)
+    assert response == bps2
