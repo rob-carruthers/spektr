@@ -50,4 +50,14 @@
     });
   }, "/set/beats_per_bar");
 
+  OSCdef(\spawn, {
+    |msg, time, addr, recvPort|
+    var requestId = msg[1];
+    var atBeats = msg[2];
+    var freq = msg[3];
+    msg.postln;
+    ~clock.schedAbs(atBeats, { Synth.new("perc1", [\freq, freq]); nil });
+    addr.sendMsg("/spawn", requestId, "ok", msg);
+  }, "/spawn");
 )
+

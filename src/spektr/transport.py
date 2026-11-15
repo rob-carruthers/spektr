@@ -8,6 +8,8 @@ from typing import NamedTuple, Self
 
 from pythonosc.udp_client import SimpleUDPClient
 
+from spektr.event import Note
+
 SCLANG_PORT = 57120
 
 type OscArg = int | float | str | bytes | bool | list[OscArg] | None
@@ -252,3 +254,10 @@ class Transport:
     def next_bar_beats(self, min_seconds: float = NEXT_BAR_LEAD_SECONDS) -> float:
         """Retrieve next_bar_beats from a fresh or recently-cached ClockState."""
         return self.clock_state.next_bar_beats(min_seconds)
+
+    def spawn(self, note: Note):
+        if note.scheduled_at is None:
+            msg = "Cannot schedule note without `scheduled_at`"
+            raise TypeError(msg)
+
+        response = self.request("/spawn", note.scheduled_at + note.offset_beats, note.freq)
