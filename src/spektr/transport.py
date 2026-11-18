@@ -8,11 +8,10 @@ from typing import NamedTuple, Self
 
 from pythonosc.udp_client import SimpleUDPClient
 
-from spektr.event import Note
+from spektr.event import Event
+from spektr.types import OscArg
 
 SCLANG_PORT = 57120
-
-type OscArg = int | float | str | bytes | bool | list[OscArg] | None
 
 
 def _as_float(name: str, value: OscArg) -> float:
@@ -274,9 +273,31 @@ class Transport:
         """Retrieve next_bar_beats from a fresh or recently-cached ClockState."""
         return self.clock_state.next_bar_beats(min_seconds)
 
-    def spawn(self, note: Note):
-        if note.scheduled_at is None:
-            msg = "Cannot schedule note without `scheduled_at`"
-            raise TypeError(msg)
+    def send_events(self, *events: Event) -> int:
+        """Send a flattened stream of Events to SuperCollider.
 
-        response = self.request("/spawn", note.scheduled_at + note.offset_beats, note.freq)
+        Each subclass of Event in *events must have an associated handler in ~dispatch in
+        SuperCollider.
+
+        Returns
+        -------
+        handled : int
+            Number of events handled/scheduled by SuperCollider.
+
+        """
+        n_events = len(events)
+        flattened: list[OscArg] = []
+        for note in events:
+            flattened.extend(note.flatten())
+
+        response = self.request("/events", n_events, *flattened)
+        match response:
+            case ["ok", int(handled)]:
+                if handled != n_events:
+                    msg = f"SC scheduled {handled}, expected {n_events}"
+                    raise ValueError(msg)
+            case _:
+                msg = f"Unexpected response: {response!r}"
+                raise ValueError(msg)
+
+        return handled

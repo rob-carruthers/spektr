@@ -1,11 +1,10 @@
-from spektr.event import Note
+from spektr.event import NoteOff, NoteOn
 from spektr.transport import Transport
 
 
 def main() -> None:
     transport = Transport()
     sched_at = transport.clock_state.next_bar_beats()
-    note = Note(scheduled_at=sched_at, freq=432, offset_beats=0)
-    transport.spawn(note)
-    note = Note(scheduled_at=sched_at, freq=500, offset_beats=0.5)
-    transport.spawn(note)
+    note1 = NoteOn(scheduled_at=sched_at, synth_name="legato1", freq=432)
+    noteoff1 = NoteOff(scheduled_at=sched_at + 0.5, note_id=note1.note_id)
+    transport.send_events(note1, noteoff1)
