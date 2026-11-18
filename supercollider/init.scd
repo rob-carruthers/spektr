@@ -3,7 +3,7 @@
 
   ~clock = TempoClock(1);
 
-  SynthDef("perc1", {
+  SynthDef(\perc1, {
     arg freq = 440.0, amp = 0.2;
     var osc = SinOsc.ar(freq: freq, mul: amp);
     var env = Env.perc(releaseTime: 0.5).kr(doneAction: 2);
