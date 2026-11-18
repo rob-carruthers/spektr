@@ -1,24 +1,24 @@
 (
-  s.waitForBoot;
-
-  ~activeNotes = Dictionary.new;
   ~clock = TempoClock.default;
 
-  SynthDef(\perc1, {
-    arg freq = 440.0, amp = 0.2;
-    var osc = SinOsc.ar(freq: freq, mul: amp);
-    var env = Env.perc(releaseTime: 0.5).kr(doneAction: 2);
-    var snd = osc * env;
-    Out.ar(0, [snd, snd]);
-  }).add;
+  s.waitForBoot {
+    SynthDef(\perc1, {
+      arg freq = 440.0, amp = 0.2;
+      var osc = SinOsc.ar(freq: freq, mul: amp);
+      var env = Env.perc(releaseTime: 0.5).kr(doneAction: 2);
+      var snd = osc * env;
+      Out.ar(0, [snd, snd]);
+    }).add;
 
-  SynthDef(\legato1, {
-    arg freq = 440.0, amp = 0.2, gate = 1;
-    var osc = SinOsc.ar(freq: freq, mul: amp);
-    var env = EnvGen.kr(Env.adsr, gate, doneAction: Done.freeSelf);
-    var snd = osc * env;
-    Out.ar(0, [snd, snd]);
-  }).add;
+    SynthDef(\legato1, {
+      arg freq = 440.0, amp = 0.2, gate = 1;
+      var osc = SinOsc.ar(freq: freq, mul: amp);
+      var env = EnvGen.kr(Env.adsr, gate, doneAction: Done.freeSelf);
+      var snd = osc * env;
+      Out.ar(0, [snd, snd]);
+    }).add;
+    s.sync;
+  };
 
   OSCdef(\ping, {
     |msg, time, addr, recvPort|
@@ -59,57 +59,62 @@
     });
   }, "/set/beats_per_bar");
 
-  ~dispatch = { |eventType, params|
-
-    switch(eventType,
-      \note_on, {
-        var id = params[0];
-        var synthName = params[1].asSymbol;
-        var freq = params[2];
-
-        ~activeNotes[id] = Synth(synthName, [\freq, freq]);
-      },
-      \note_off, {
-        var id = params[0];
-        var synth = ~activeNotes.removeAt(id);
-        if (synth.notNil) {
-          synth.set(\gate, 0);
-        };
-      }
+  ~dispatch = { |kind, id, args|
+    // dispatch an event, its ID and args
+    
+    switch(kind,
+      \note_on,  { s.sendMsg("/s_new", args[0], id, 0, 1, *args.drop(1)) },
+      \note_set,  { s.sendMsg("/n_set", id, *args) },
+      \note_off, { s.sendMsg("/n_set", id, \gate, 0) },
+      { "unknown event kind: %".format(kind).warn }
     );
   };
 
-  OSCdef(\events, {
-    |msg, time, addr, recvPort|
+  ~parseEvents = { |msg, start|
+    var i = start;
+    var events = List.new;
+    var ok = true;
+
+    while { ok and: { i < msg.size } } {
+      var beats, kind, nArgs;
+
+      // Walk through the message with a cursor, parsing out events/params as we go
+      if(i + 3 > msg.size) { ok = false } {
+        beats = msg[i];
+        kind = msg[i + 1].asSymbol;
+        nArgs = msg[i + 2].asInteger;
+        if(i + 3 + nArgs > msg.size) { ok = false } {
+          events.add((beats: beats, kind: kind,
+            args: Array.fill(nArgs, { |k| msg[i + 3 + k] })));
+          i = i + 3 + nArgs;
+        };
+      };
+    };
+    if(ok) { events.asArray } { nil }
+  };
+
+  OSCdef(\events, { |msg, time, addr|
     var requestId = msg[1];
     var nEvents = msg[2];
-    var handled = 0;
-    
-    // event stream starts at msg[3]
-    var streamIdx = 3;
+    var events = ~parseEvents.(msg, 3);
+    var refs = Dictionary.new;
 
-    while { streamIdx < msg.size } {
-      var atBeats = msg[streamIdx];
-      var eventType = msg[streamIdx + 1].asSymbol;
-      var nParams = msg[streamIdx + 2].asInteger;
-      var params;
-
-      if (streamIdx + nParams > msg.size) {
-        Error("Malformed event stream").throw;
+    // Walk through events, dispatching each one
+    if(events.isNil or: { events.size != nEvents }, {
+      addr.sendMsg("/events", requestId, "error", "malformed event stream");
+    }, {
+      events.do { |ev|
+        var ref = ev[\args][0];
+        var id;
+        if(refs[ref].isNil) { refs[ref] = s.nextNodeID };
+        id = refs[ref];
+        ~clock.schedAbs(ev[\beats], {
+          s.bind { ~dispatch.(ev[\kind], id, ev[\args].drop(1)) };
+          nil
+        });
       };
-
-      streamIdx = streamIdx + 3;
-
-      params = msg.copyRange(streamIdx, streamIdx + nParams - 1);
-      streamIdx = streamIdx + nParams;
-      ~clock.schedAbs(atBeats, {
-        ~dispatch.value(eventType, params);
-        nil;
-      });
-      handled = handled + 1;
-
-    };
-    addr.sendMsg("/events", requestId, "ok", handled);
+      addr.sendMsg("/events", requestId, "ok", events.size);
+    });
   }, "/events");
 )
 

@@ -273,31 +273,15 @@ class Transport:
         """Retrieve next_bar_beats from a fresh or recently-cached ClockState."""
         return self.clock_state.next_bar_beats(min_seconds)
 
-    def send_events(self, *events: Event) -> int:
-        """Send a flattened stream of Events to SuperCollider.
-
-        Each subclass of Event in *events must have an associated handler in ~dispatch in
-        SuperCollider.
-
-        Returns
-        -------
-        handled : int
-            Number of events handled/scheduled by SuperCollider.
-
-        """
-        n_events = len(events)
-        flattened: list[OscArg] = []
-        for note in events:
-            flattened.extend(note.flatten())
-
-        response = self.request("/events", n_events, *flattened)
-        match response:
-            case ["ok", int(handled)]:
-                if handled != n_events:
-                    msg = f"SC scheduled {handled}, expected {n_events}"
-                    raise ValueError(msg)
-            case _:
-                msg = f"Unexpected response: {response!r}"
+    def send_events(self, *events: Event) -> None:
+        """Send a stream of events to SuperCollider to schedule."""
+        flat = [x for e in events for x in e.flatten()]
+        match self.request("/events", len(events), *flat, timeout=0.5):
+            case ["ok", int(n)] if n == len(events):
+                return
+            case ["error", str(reason)]:
+                msg = f"SuperCollider rejected the events: {reason}"
                 raise ValueError(msg)
-
-        return handled
+            case other:
+                msg = f"Unexpected response to /events: {other!r}"
+                raise ValueError(msg)
