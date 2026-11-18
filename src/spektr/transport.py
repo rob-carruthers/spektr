@@ -174,7 +174,14 @@ class Transport:
         return ClockState.from_message(response, requested_at, expiry=self._clock_state_timeout)
 
     def set_beats_per_second(self, beats_per_second: float) -> float:
-        """Set SC's tempo instantaneously."""
+        """Set SC's tempo instantaneously.
+
+        Returns
+        -------
+        beats_per_second : float
+            The confirmed new beats per second.
+
+        """
         response = self.request("/set/beats_per_second", beats_per_second)
         if not isinstance(response[1], float):
             raise TypeError
@@ -189,6 +196,12 @@ class Transport:
         """Set SC's beats per minute instantaneously.
 
         Convenience wrapper for Transport.set_beats_per_second().
+
+        Returns
+        -------
+        beats_per_minute : float
+            The confirmed new beats per minute.
+
         """
         self.set_beats_per_second(beats_per_minute / 60.0)
 
@@ -199,6 +212,12 @@ class Transport:
 
         Request a change at the next bar, failing if one has already been requested (and still
         pending), or if we are requesting a meter change at a time in the past.
+
+        Returns
+        -------
+        next_bar_beats : float
+            The beats at the next bar, when the meter change takes effect.
+
         """
         if upper <= 0:
             msg = "`upper` should be > 0"
