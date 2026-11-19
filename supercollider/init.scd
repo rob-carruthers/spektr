@@ -51,6 +51,18 @@
     });
   }, "/set/beats_per_bar");
 
+  OSCdef(\createBus, {
+    |msg, time, addr, recvPort|
+    var requestId = msg[1];
+    var nChannels = msg[2].asInteger;
+    var createdChannels;
+
+    b = Bus.audio(s, nChannels);
+    createdChannels = b.numChannels();
+
+    addr.sendMsg("/create/bus", requestId, "ok", createdChannels, b.index);
+  }, "/create/bus");
+
   ~dispatch = { |kind, id, args|
     // dispatch an event, its ID and args
     

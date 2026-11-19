@@ -285,3 +285,23 @@ class Transport:
             case other:
                 msg = f"Unexpected response to /events: {other!r}"
                 raise ValueError(msg)
+
+    def create_bus(self, n_channels: int) -> int:
+        """Create a new bus on the default SuperCollider server.
+
+        Returns
+        -------
+        index : int
+            The bus index assigned in SuperCollider. Store a reference to this to enable routing
+            from Python.
+
+        """
+        match self.request("/create/bus", n_channels):
+            case ["ok", int(created), int(index)] if created == n_channels:
+                return index
+            case ["ok", int(created), _]:
+                msg = f"SuperCollider created a bus with {created} channels; {n_channels} requested"
+                raise ValueError(msg)
+            case other:
+                msg = f"Unexpected response to /events: {other!r}"
+                raise ValueError(msg)
