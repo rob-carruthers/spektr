@@ -2,14 +2,6 @@
   ~clock = TempoClock.default;
 
   s.waitForBoot {
-    SynthDef(\perc1, {
-      arg freq = 440.0, amp = 0.2;
-      var osc = SinOsc.ar(freq: freq, mul: amp);
-      var env = Env.perc(releaseTime: 0.5).kr(doneAction: 2);
-      var snd = osc * env;
-      Out.ar(0, [snd, snd]);
-    }).add;
-
     SynthDef(\legato1, {
       arg freq = 440.0, amp = 0.2, gate = 1;
       var osc = SinOsc.ar(freq: freq, mul: amp);
