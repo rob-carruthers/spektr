@@ -65,6 +65,7 @@ class NoteOn(NoteEvent):
 
     wire_type: ClassVar[str | None] = "note_on"
     synth_name: ClassVar[str]
+    out: int
     note_id: int = field(default_factory=lambda: next(ID_COUNTER))
 
     def _control_names(self) -> set[str]:

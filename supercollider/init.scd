@@ -3,11 +3,11 @@
 
   s.waitForBoot {
     SynthDef(\legato1, {
-      arg freq = 440.0, amp = 0.2, gate = 1;
+      arg freq = 440.0, amp = 0.2, gate = 1, out = 0;
       var osc = SinOsc.ar(freq: freq, mul: amp);
       var env = EnvGen.kr(Env.adsr, gate, doneAction: Done.freeSelf);
       var snd = osc * env;
-      Out.ar(0, [snd, snd]);
+      Out.ar(out, [snd, snd]);
     }).add;
     s.sync;
   };
